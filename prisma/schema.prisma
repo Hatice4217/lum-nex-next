@@ -1,0 +1,534 @@
+// LUMINEX Next.js - Prisma Schema
+// SQLite Database Schema (Development)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// ============================================
+// KULLANICI MODELLERİ
+// ============================================
+
+enum UserRole {
+  PATIENT
+  DOCTOR
+  ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  password          String    // bcrypt hash
+  role              UserRole  @default(PATIENT)
+  firstName         String
+  lastName          String
+  tcKimlikNo        String?   @unique // TC Kimlik Numarası (11 haneli)
+  phone             String?
+  gender            Gender?
+  dateOfBirth       DateTime?
+  avatar            String?
+  emailVerified     DateTime?
+  isActive          Boolean   @default(true)
+  isEmailVerified   Boolean   @default(false)
+  isPhoneVerified   Boolean   @default(false)
+  lastLoginAt       DateTime?
+  failedLoginAttempts Int     @default(0)
+  lockedUntil       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // İlişkiler
+  patientProfile    PatientProfile?
+  doctorProfile     DoctorProfile?
+  sessions          Session[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  sentMessages      Message[]  @relation("SentMessages")
+  receivedMessages  Message[]  @relation("ReceivedMessages")
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+  testResults       TestResult[]
+  payments          Payment[]
+
+  @@index([email])
+  @@index([tcKimlikNo])
+  @@index([role])
+}
+
+// ============================================
+// HASTA PROFİLİ
+// ============================================
+
+model PatientProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bloodType       String?  // A+, A-, B+, B-, AB+, AB-, 0+, 0-
+  allergies       String?  // JSON array
+  chronicDiseases String?  // JSON array
+  emergencyContact String?
+  emergencyPhone  String?
+  insuranceNo     String?
+  insuranceCompany String?
+  address         String?
+  city            String?
+  district        String?
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ============================================
+// DOKTOR PROFİLİ
+// ============================================
+
+model DoctorProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  licenseNo         String   @unique // Meslek kimlik numarası
+  hospitalId        String?
+  hospital          Hospital? @relation(fields: [hospitalId], references: [id])
+  departmentId      String?
+  department        Department? @relation(fields: [departmentId], references: [id])
+  title             String?  // Prof. Dr., Dr., Uzm. Dr. vb.
+  experience        Int?     // Yıl sayısı
+  education         String?  // JSON array
+  specializations   String?  // JSON array
+  biography         String?
+  consultationFee   Float?
+  isAvailable       Boolean  @default(true)
+  rating            Float    @default(0)
+  totalReviews      Int      @default(0)
+  languages         String?  // JSON array
+  schedule          String?  // JSON
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  blockedSlots      BlockedSlot[]
+  appointments      Appointment[]
+  prescriptions     Prescription[]
+
+  @@index([hospitalId])
+  @@index([departmentId])
+}
+
+// ============================================
+// HASTANE
+// ============================================
+
+model Hospital {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  address         String?
+  city            String?
+  district        String?
+  phone           String?
+  email           String?
+  website         String?
+  logo            String?
+  image           String?
+  description     String?
+  facilities      String?
+  workingHours    String?
+  emergencyService Boolean @default(false)
+  isActive        Boolean  @default(true)
+  rating          Float    @default(0)
+  totalReviews    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  departments     Department[]
+  doctors         DoctorProfile[]
+  appointments     Appointment[]
+
+  @@index([slug])
+  @@index([city])
+}
+
+// ============================================
+// BÖLÜM / DEPARTMAN
+// ============================================
+
+model Department {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  hospitalId      String?
+  hospital        Hospital? @relation(fields: [hospitalId], references: [id], onDelete: SetNull)
+  description     String?
+  icon            String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  doctors         DoctorProfile[]
+  appointments     Appointment[]
+
+  @@index([slug])
+  @@index([hospitalId])
+}
+
+// ============================================
+// RANDEVU
+// ============================================
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model Appointment {
+  id              String             @id @default(cuid())
+  appointmentNo   String             @unique
+  patientId       String
+  patient         User               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId        String
+  doctor          DoctorProfile      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  hospitalId      String?
+  hospital        Hospital?          @relation(fields: [hospitalId], references: [id])
+  departmentId    String?
+  department      Department?        @relation(fields: [departmentId], references: [id])
+
+  appointmentDate DateTime
+  startTime       String
+  endTime         String
+  duration        Int
+
+  status          AppointmentStatus  @default(PENDING)
+  reason          String?
+  symptoms        String?
+  notes           String?
+
+  isOnline        Boolean            @default(false)
+  meetingLink     String?
+
+  cancellationReason String?
+  cancelledAt     DateTime?
+  cancelledBy     String?
+
+  reminderSent    Boolean            @default(false)
+  reminderSentAt  DateTime?
+
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([appointmentDate])
+  @@index([status])
+}
+
+// ============================================
+// DOKTOR MÜSAİTLİK ENGELLEMELERİ
+// ============================================
+
+model BlockedSlot {
+  id          String   @id @default(cuid())
+  doctorId    String
+  doctor      DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  date        DateTime
+  startTime   String
+  endTime     String
+  reason      String?
+  isRecurring Boolean  @default(false)
+  recurringDays String?
+  createdAt   DateTime @default(now())
+
+  @@index([doctorId])
+  @@index([date])
+}
+
+// ============================================
+// REÇETE
+// ============================================
+
+model Prescription {
+  id              String   @id @default(cuid())
+  prescriptionNo  String   @unique
+  patientId       String
+  patient         User     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId        String
+  doctor          DoctorProfile @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointmentId   String?
+
+  diagnosis       String
+  medications     String
+  dosage          String?
+  usage           String?
+  notes           String?
+
+  issuedAt        DateTime @default(now())
+  validUntil      DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([doctorId])
+}
+
+// ============================================
+// TahlİL SONUÇLARI
+// ============================================
+
+enum TestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+model TestResult {
+  id          String     @id @default(cuid())
+  testNo      String     @unique
+  patientId   String
+  patient     User       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId    String?
+
+  testType    String
+  testName    String
+  description String?
+
+  status      TestStatus @default(PENDING)
+  results     String?
+  notes       String?
+
+  testDate    DateTime   @default(now())
+  resultDate  DateTime?
+
+  fileUrl     String?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([patientId])
+  @@index([status])
+}
+
+// ============================================
+// MESAJLAR
+// ============================================
+
+enum MessageType {
+  TEXT
+  IMAGE
+  DOCUMENT
+  SYSTEM
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+
+model Message {
+  id          String        @id @default(cuid())
+  senderId    String
+  sender      User          @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId  String
+  receiver    User          @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  appointmentId String?
+
+  type        MessageType   @default(TEXT)
+  content     String
+  fileUrl     String?
+
+  status      MessageStatus @default(SENT)
+  readAt      DateTime?
+
+  createdAt   DateTime      @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
+
+// ============================================
+// BİLDİRİMLER
+// ============================================
+
+enum NotificationType {
+  APPOINTMENT
+  MESSAGE
+  PRESCRIPTION
+  TEST_RESULT
+  SYSTEM
+  REMINDER
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type        NotificationType
+  title       String
+  message     String
+  link        String?
+
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+
+  createdAt   DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================
+// ÖDEME
+// ============================================
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  BANK_TRANSFER
+  CASH
+  ONLINE
+}
+
+model Payment {
+  id              String         @id @default(cuid())
+  paymentNo       String         @unique
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appointmentId   String?
+
+  amount          Float
+  currency        String         @default("TRY")
+
+  status          PaymentStatus  @default(PENDING)
+  method          PaymentMethod
+
+  description     String?
+
+  transactionId   String?        @unique
+  paymentDate     DateTime?
+
+  refundAmount    Float?
+  refundDate      DateTime?
+  refundReason    String?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([paymentDate])
+}
+
+// ============================================
+// OTURUM YÖNETİMİ
+// ============================================
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionToken String   @unique
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+// ============================================
+// DENETİM LOGU
+// ============================================
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  REGISTER
+  PASSWORD_CHANGE
+  PROFILE_UPDATE
+  APPOINTMENT_CREATE
+  APPOINTMENT_CANCEL
+  APPOINTMENT_COMPLETE
+  PRESCRIPTION_CREATE
+  TEST_RESULT_CREATE
+  USER_CREATE
+  USER_UPDATE
+  USER_DELETE
+  ADMIN_ACTION
+}
+
+model AuditLog {
+  id          String      @id @default(cuid())
+  userId      String?
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  action      AuditAction
+  entityType  String?
+  entityId    String?
+
+  description String
+  metadata    String?
+
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt   DateTime    @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================
+// LİSANS
+// ============================================
+
+model License {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  domain      String
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime
+
+  companyName String?
+  contactName String?
+  contactEmail String?
+  contactPhone String?
+
+  licenseType String
+  maxUsers    Int?
+  maxDoctors  Int?
+
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
+  @@index([domain])
+}
