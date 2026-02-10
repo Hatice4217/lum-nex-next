@@ -1,3 +1,5 @@
+'use client';
+
 // LUMINEX Next.js - Login Page
 // Giriş sayfası
 

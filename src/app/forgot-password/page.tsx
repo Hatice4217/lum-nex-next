@@ -1,3 +1,5 @@
+'use client';
+
 // LUMINEX Next.js - Forgot Password Page
 // Şifremi unuttum sayfası
 

@@ -1,3 +1,5 @@
+'use client';
+
 // LUMINEX Next.js - Reset Password Page
 // Şifre sıfırlama sayfası
 

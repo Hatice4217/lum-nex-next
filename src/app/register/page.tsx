@@ -1,3 +1,5 @@
+'use client';
+
 // LUMINEX Next.js - Register Page
 // Kayıt sayfası
 
