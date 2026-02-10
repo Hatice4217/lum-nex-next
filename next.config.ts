@@ -27,9 +27,6 @@ const nextConfig: NextConfig = {
   // Source maps (disable in production)
   productionBrowserSourceMaps: false,
 
-  // Turbopack config (empty = use defaults)
-  turbopack: {},
-
   // Headers for security
   async headers() {
     return [
